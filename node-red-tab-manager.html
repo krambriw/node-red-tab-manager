@@ -1,0 +1,313 @@
+<script type="text/javascript">
+(function() {
+    let tabStack = [];
+    let renderTimeout = null;
+    let draggedElement = null;
+    let externalWindow = null;
+    let rootContainer = null;
+
+    RED.plugins.registerPlugin("node-red-tab-manager", {
+        type: "sidebar",
+        onadd: function() {
+            const content = $('<div class="red-ui-sidebar-node-red-tab-manager" style="position:relative; height:100%; display:flex; flex-direction:column; padding:10px; box-sizing:border-box;"></div>');
+            
+            const toolbar = $('<div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">' +
+                '<span style="font-weight:bold;">Sortera flikar (v5)</span>' +
+                '<div>' +
+                '<button class="red-ui-deploy-button" id="btn-popout-tabs" style="padding:4px 8px; margin-right:5px;"><i class="fa fa-external-link"></i></button>' +
+                '<button class="red-ui-deploy-button" id="btn-refresh-tabs" style="padding:4px 8px;"><i class="fa fa-refresh"></i></button>' +
+                '</div>' +
+                '</div>');
+            
+            const listContainer = $('<div id="tabs-stack-list" style="flex:1; overflow-y:auto; border:1px solid var(--red-ui-form-input-border-color, #ccc); border-radius:4px; padding:5px;"></div>');
+            
+            content.append(toolbar);
+            content.append(listContainer);
+            rootContainer = listContainer;
+
+            function refreshTabListFromNodeRed() {
+                if (typeof RED.nodes.workspaceOrder === "function") {
+                    tabStack = RED.nodes.workspaceOrder() || [];
+                } else if (typeof RED.nodes.createCompleteNodeSet === "function") {
+                    tabStack = RED.nodes.createCompleteNodeSet().filter(n => n.type === 'tab').map(n => n.id) || [];
+                }
+            }
+
+            function updateActiveTabHighlight() {
+                let activeTabId = null;
+                if (RED.workspaces && typeof RED.workspaces.active === "function") {
+                    activeTabId = RED.workspaces.active();
+                }
+
+                rootContainer.find('.tab-sortable-item').each(function() {
+                    const el = $(this);
+                    const tabId = el.data('tab-id');
+                    const isTabDisabled = el.data('is-disabled') === true;
+                    
+                    if (tabId === activeTabId) {
+                        el.css({
+                            'background': 'var(--red-ui-sidebar-background, #e0e0e0)',
+                            'border': '1px solid var(--red-ui-primary-color, #ad1c1c)'
+                        }).find('.tab-label-text').css('font-weight', 'bold');
+                    } else {
+                        const bg = isTabDisabled ? 'var(--red-ui-form-input-background, #eaeaea)' : 'var(--red-ui-menu-bg, #f6f6f6)';
+                        el.css({
+                            'background': bg,
+                            'border': '1px solid var(--red-ui-form-input-border-color, #ddd)'
+                        }).find('.tab-label-text').css('font-weight', 'normal');
+                    }
+                });
+            }
+
+            function applyNewOrderToNodeRed(newOrder) {
+                if (!RED.nodes || !RED.workspaces) return;
+
+                if (typeof RED.nodes.workspaceOrder === "function") {
+                    RED.nodes.workspaceOrder(newOrder);
+                }
+                if (RED.workspaces && typeof RED.workspaces.order === "function") {
+                    RED.workspaces.order(newOrder);
+                }
+
+                newOrder.forEach((tabId) => {
+                    let wsNode = RED.nodes.workspace(tabId);
+                    if (wsNode) wsNode.changed = true;
+                });
+
+                if (typeof RED.nodes.dirty === "function") {
+                    RED.nodes.dirty(true);
+                }
+
+                if (RED.events && typeof RED.events.emit === "function") {
+                    RED.events.emit("workspace-order-changed", newOrder);
+                }
+
+                if (RED.workspaces && typeof RED.workspaces.refresh === "function") {
+                    RED.workspaces.refresh();
+                }
+
+                const activeTabBefore = RED.workspaces.active();
+                if (activeTabBefore && newOrder.length > 1) {
+                    const altTab = newOrder.find(id => id !== activeTabBefore);
+                    if (altTab && RED.view && RED.view.selectWorkspace) {
+                        RED.view.selectWorkspace(altTab);
+                        setTimeout(() => {
+                            RED.view.selectWorkspace(activeTabBefore);
+                            if (RED.view.redraw) RED.view.redraw();
+                        }, 10);
+                    }
+                } else if (RED.view && RED.view.redraw) {
+                    RED.view.redraw();
+                }
+            }
+
+            function renameTabInNodeRed(tabId, newName) {
+                let wsNode = RED.nodes.workspace(tabId);
+                if (!wsNode) return;
+
+                wsNode.label = newName;
+                wsNode.changed = true;
+
+                if (typeof RED.nodes.dirty === "function") {
+                    RED.nodes.dirty(true);
+                }
+                if (RED.workspaces && typeof RED.workspaces.refresh === "function") {
+                    RED.workspaces.refresh();
+                }
+                if (RED.view && typeof RED.view.redraw === "function") {
+                    RED.view.redraw();
+                }
+            }
+
+            function renderStack() {
+                rootContainer.empty();
+                
+                if (!tabStack || tabStack.length === 0) {
+                    rootContainer.html('<div style="color:#999; font-style:italic; padding:10px; text-align:center;">Inga flikar hittades.</div>');
+                    return;
+                }
+
+                tabStack.forEach(tabId => {
+                    let workspace = RED.nodes.workspace(tabId) || (typeof RED.nodes.node === "function" && RED.nodes.node(tabId));
+                    if (!workspace) return;
+
+                    const label = workspace.label || workspace.name || "Namnlös flik";
+                    const isTabDisabled = workspace.disabled === true;
+                    
+                    const opacityStyle = isTabDisabled ? 'opacity: 0.55;' : '';
+                    const fontStyle = isTabDisabled ? 'font-style: italic;' : '';
+                    const statusIconClass = isTabDisabled ? 'fa fa-eye-slash' : 'fa fa-columns';
+                    const statusIconColor = isTabDisabled ? '#888' : 'var(--red-ui-primary-color, #ad1c1c)';
+
+                    const tabItem = $(`<div class="tab-sortable-item" draggable="true" data-tab-id="${tabId}" data-is-disabled="${isTabDisabled}" style="padding:8px; margin-bottom:5px; border-radius:3px; cursor:grab; font-size:13px; display:flex; align-items:center; user-select:none; border:1px solid var(--red-ui-form-input-border-color, #ddd); background:var(--red-ui-menu-bg, #f6f6f6); transition: transform 0.1s ease; ${opacityStyle}">` +
+                        `<i class="fa fa-bars" style="margin-right:8px; color:#aaa; cursor:grab;"></i>` + 
+                        `<i class="${statusIconClass}" style="margin-right:8px; color:${statusIconColor}; width: 14px; text-align: center;"></i>` +
+                        `<span class="tab-label-text" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; ${fontStyle}" title="Dubbelklicka för att döpa om ${isTabDisabled ? '(Inaktiverad)' : ''}">${label}</span>` +
+                        `</div>`);
+
+                    tabItem.on("click", function(e) {
+                        if ($(e.target).hasClass('tab-rename-input')) return;
+                        if (RED.view && typeof RED.view.selectWorkspace === "function") {
+                            RED.view.selectWorkspace(tabId);
+                        }
+                    });
+
+                    tabItem.on("dblclick", function(e) {
+                        e.stopPropagation();
+                        const labelSpan = $(this).find('.tab-label-text');
+                        if (labelSpan.find('input').length > 0) return;
+
+                        const currentName = labelSpan.text();
+                        const inputField = $(`<input type="text" class="tab-rename-input" value="${currentName}" style="width:100%; box-sizing:border-box; padding:2px 5px; border:1px solid var(--red-ui-primary-color, #ad1c1c); border-radius:3px; font-size:13px; height:22px; background:var(--red-ui-form-input-background, #fff); color:var(--red-ui-form-input-color, #333);">`);
+                        
+                        labelSpan.html(inputField);
+                        inputField.focus().select();
+
+                        function saveNewName() {
+                            const val = inputField.val().trim();
+                            if (val && val !== currentName) {
+                                renameTabInNodeRed(tabId, val);
+                                labelSpan.text(val);
+                            } else {
+                                labelSpan.text(currentName);
+                            }
+                        }
+
+                        inputField.on("keydown", function(keyEvent) {
+                            if (keyEvent.key === "Enter") { saveNewName(); } 
+                            else if (keyEvent.key === "Escape") { labelSpan.text(currentName); }
+                        });
+
+                        inputField.on("blur", function() { saveNewName(); });
+                    });
+
+                    tabItem.on("dragstart", function(e) {
+                        if ($(e.target).find('input').length > 0 || $(e.target).hasClass('tab-rename-input')) {
+                            e.preventDefault(); return;
+                        }
+                        draggedElement = this;
+                        if(e.originalEvent.dataTransfer) {
+                            e.originalEvent.dataTransfer.effectAllowed = "move";
+                            e.originalEvent.dataTransfer.setData("text/plain", tabId);
+                        }
+                        setTimeout(() => $(this).css("opacity", "0.3"), 0);
+                    });
+
+                    tabItem.on("dragend", function() {
+                        $(this).css("opacity", isTabDisabled ? "0.55" : "1.0");
+                        draggedElement = null;
+                        
+                        const finalOrder = [];
+                        rootContainer.find('.tab-sortable-item').each(function() {
+                            finalOrder.push($(this).data('tab-id'));
+                        });
+                        
+                        tabStack = finalOrder;
+                        applyNewOrderToNodeRed(finalOrder);
+                    });
+
+                    tabItem.on("dragover", function(e) {
+                        e.preventDefault();
+                        if (this === draggedElement) return;
+
+                        const bounding = this.getBoundingClientRect();
+                        const offset = e.originalEvent.clientY - bounding.top;
+                        
+                        if (offset > bounding.height / 2) { $(this).after(draggedElement); } 
+                        else { $(this).before(draggedElement); }
+                    });
+
+                    rootContainer.append(tabItem);
+                });
+
+                updateActiveTabHighlight();
+            }
+
+            function queueRender() {
+                clearTimeout(renderTimeout);
+                renderTimeout = setTimeout(() => {
+                    refreshTabListFromNodeRed();
+                    renderStack();
+                }, 50);
+            }
+
+            toolbar.find("#btn-popout-tabs").on("click", function() {
+                if (externalWindow && !externalWindow.closed) {
+                    externalWindow.focus();
+                    return;
+                }
+
+                externalWindow = window.open("", "NodeREDTabManagerPopout", "width=350,height=600,menubar=no,toolbar=no,location=no,status=no");
+                if (!externalWindow) {
+                    alert("Webbläsaren blockerade popup-fönstret. Tillåt popups för Node-RED.");
+                    return;
+                }
+
+                let stylesHtml = "";
+                $('link[rel="stylesheet"], style').each(function() {
+                    stylesHtml += this.outerHTML;
+                });
+
+                externalWindow.document.write('<html><head><title>Tab Manager</title>' + stylesHtml + '</head>' +
+                    '<body class="red-ui" style="padding:10px; margin:0; height:100%; display:flex; flex-direction:column; background:var(--red-ui-sidebar-background, #fff); color:var(--red-ui-primary-color-text, #333); overflow:hidden;">' +
+                    '<div id="popout-root" style="flex:1; display:flex; flex-direction:column; overflow:hidden;"></div>' +
+                    '</body></html>');
+                externalWindow.document.close();
+
+                const popoutRoot = $(externalWindow.document).find('#popout-root');
+                popoutRoot.append(listContainer);
+                rootContainer = popoutRoot;
+
+                listContainer.css("height", "100%");
+                content.append('<div id="popout-msg" style="color:#999; font-style:italic; padding:20px; text-align:center;">Öppen i ett separat fönster.</div>');
+
+                $(externalWindow).on("beforeunload", function() {
+                    content.find('#popout-msg').remove();
+                    content.append(listContainer);
+                    rootContainer = listContainer;
+                    externalWindow = null;
+                    queueRender();
+                });
+
+                queueRender();
+            });
+
+            $(document).on("mouseup.tabmanager", function(e) {
+                if ($(e.target).closest('.red-ui-tabs, .red-ui-header').length > 0) {
+                    setTimeout(queueRender, 80);
+                }
+            });
+
+            $(document).on("click", "#node-dialog-ok", function() {
+                setTimeout(queueRender, 150);
+            });
+
+            RED.events.on("workspace-order-changed", function(newOrder) {
+                tabStack = newOrder;
+                renderStack();
+            });
+            RED.events.on("workspace:change", function(event) {
+                updateActiveTabHighlight();
+            });
+            RED.events.on("sidebar:node-red-tab-manager:visible", queueRender);
+            RED.events.on("nodes:add", function(node) { if (node.type === "tab") queueRender(); });
+            RED.events.on("nodes:remove", function(node) { if (node.type === "tab") queueRender(); });
+            RED.events.on("nodes:change", function(node) { if (node.type === "tab") queueRender(); });
+
+            toolbar.find("#btn-refresh-tabs").on("click", queueRender);
+
+            RED.sidebar.addTab({
+                id: "node-red-tab-manager",
+                label: " Flikar",
+                name: "Tab Manager",
+                iconClass: "fa fa-sliders",
+                content: content,
+                enableOnEdit: true
+            });
+
+            setTimeout(queueRender, 500);
+        }
+    });
+})();
+</script>
+<!-- SLUT PÅ FILEN -->

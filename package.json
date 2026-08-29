@@ -1,0 +1,20 @@
+{
+  "name": "node-red-tab-manager-v5",
+  "version": "1.0.0",
+  "description": "Vertical Tab Manager for Node-RED v5 sidebar with bi-directional sync",
+  "main": "index.js",
+  "node-red": {
+    "plugins": {
+      "node-red-tab-manager": "node-red-tab-manager.html"
+    }
+  },
+  "keywords": [
+    "node-red",
+    "node-red-tab-manager",
+    "sidebar",
+    "tab-manager",
+    "flows"
+  ],
+  "author": "Walter Krämbring",
+  "license": "MIT"
+}
