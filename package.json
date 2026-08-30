@@ -5,7 +5,7 @@
   "main": "index.js",
   "node-red": {
     "plugins": {
-      "node-red-tab-manager-v5": "node-red-tab-manager.js"
+      "node-red-tab-manager-v5": "node-red-tab-manager-v5.js"
     }
   },
   "keywords": [
