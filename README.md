@@ -16,6 +16,7 @@ This repository is split into two separate versions to accommodate different Nod
 ## Features
 
 - ↕️ **Bi-directional Drag & Drop:** Reorder your tabs vertically inside the sidebar. The top tabs in Node-RED will sync instantly, and vice versa!
+- ↔️ **Bi-directional Navigation:** Click on any tab listed in the sidebar and the focus will change to the corresponding tab in Node-RED. Vice versa works also!!
 - ✏️ **Full Two-Way Inline Renaming:** Double-click any flow tab in the sidebar to rename it, or change it via Node-RED properties. Names sync perfectly in both directions.
 - 👁️ **Visual Status Indicators:** Disabled flows are styled with lower opacity, italic text, and a `fa-eye-slash` icon to easily separate active routines from muted ones.
 - 🎨 **Native Theme Integration:** Fully adopts your active Node-RED editor colors and CSS variables for a seamless native look.
@@ -25,16 +26,14 @@ This repository is split into two separate versions to accommodate different Nod
 
 ## Installation
 
-1. Navigate to your Node-RED user directory (usually `~/.node-red`):
+Install via the Node-RED palette manager, or from the command line:
+
    ```bash
-   cd ~/.node-red
+cd ~/.node-red
+npm install node-red-contrib-s2
+
    ```
-2. Download the version corresponding to your Node-RED instance (`v4` or `v5`) and place it inside your workspace.
-3. Install the module locally:
-   ```bash
-   npm install /path/to/node-red-tab-manager/v5
-   ```
-4. Restart your Node-RED instance and force-refresh your browser (`Ctrl + F5` or `Cmd + Shift + R`).
+Restart your Node-RED instance and force-refresh your browser (`Ctrl + F5` or `Cmd + Shift + R`).
 
 ---
 
