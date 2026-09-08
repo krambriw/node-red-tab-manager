@@ -1,6 +1,6 @@
 {
   "name": "@krambriw/node-red-tab-manager-v5",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Vertical Tab Manager for Node-RED v5 sidebar with bi-directional sync",
   "main": "index.js",
   "node-red": {
