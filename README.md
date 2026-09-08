@@ -32,6 +32,10 @@ Install via the Node-RED palette manager, or from the command line:
 cd ~/.node-red
 npm install @krambriw/node-red-tab-manager-v5
 
+or
+
+npm install @krambriw/node-red-tab-manager-v4
+
    ```
 Restart your Node-RED instance and force-refresh your browser (`Ctrl + F5` or `Cmd + Shift + R`).
 
