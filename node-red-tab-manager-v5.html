@@ -5,7 +5,6 @@
     let draggedElement = null;
     let externalWindow = null;
     let rootContainer = null;
-    let lastKnownNodeRedOrder = "";
 
     RED.plugins.registerPlugin("node-red-tab-manager", {
         type: "sidebar",
@@ -15,7 +14,7 @@
             const toolbar = $('<div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">' +
                 '<span style="font-weight:bold;">Sortera flikar (v5)</span>' +
                 '<div>' +
-                '<button class="red-ui-deploy-button" id="btn-popout-tabs" style="padding:4px 8px; margin-right:5px;" title="Koppla loss till eget fönster"><i class="fa fa-external-link"></i></button>' +
+                '<button class="red-ui-deploy-button" id="btn-popout-tabs" style="padding:4px 8px; margin-right:5px;" title="Koppla loss till eget f√∂nster"><i class="fa fa-external-link"></i></button>' +
                 '<button class="red-ui-deploy-button" id="btn-refresh-tabs" style="padding:4px 8px;"><i class="fa fa-refresh"></i></button>' +
                 '</div>' +
                 '</div>');
@@ -32,7 +31,6 @@
                 } else if (typeof RED.nodes.createCompleteNodeSet === "function") {
                     tabStack = RED.nodes.createCompleteNodeSet().filter(n => n.type === 'tab').map(n => n.id) || [];
                 }
-                lastKnownNodeRedOrder = JSON.stringify(tabStack);
             }
 
             function updateActiveTabHighlight() {
@@ -61,10 +59,8 @@
                 });
             }
 
-            // --- REPARATION: STENSÄKER DIREKTNAVIGERING UTAN FÖNSTRETTRASTER ---
             function selectWorkspaceInNodeRed(tabId) {
                 try {
-                    // I Node-RED 5 är detta det mest robusta sättet att byta flik från ett tillägg
                     if (RED.workspaces && typeof RED.workspaces.show === "function") {
                         RED.workspaces.show(tabId);
                     } else if (RED.actions && typeof RED.actions.invoke === "function") {
@@ -114,7 +110,6 @@
                         }, 10);
                     }
                 }
-                lastKnownNodeRedOrder = JSON.stringify(newOrder);
             }
 
             function renameTabInNodeRed(tabId, newName) {
@@ -147,7 +142,7 @@
                     let workspace = RED.nodes.workspace(tabId) || (typeof RED.nodes.node === "function" && RED.nodes.node(tabId));
                     if (!workspace) return;
 
-                    const label = workspace.label || workspace.name || "Namnlös flik";
+                    const label = workspace.label || workspace.name || "Namnl√∂s flik";
                     const isTabDisabled = workspace.disabled === true;
                     
                     const opacityStyle = isTabDisabled ? 'opacity: 0.55;' : '';
@@ -158,10 +153,9 @@
                     const tabItem = $(`<div class="tab-sortable-item" draggable="true" data-tab-id="${tabId}" data-is-disabled="${isTabDisabled}" style="padding:8px; margin-bottom:5px; border-radius:3px; cursor:grab; font-size:13px; display:flex; align-items:center; user-select:none; border:1px solid var(--red-ui-form-input-border-color, #ddd); background:var(--red-ui-menu-bg, #f6f6f6); transition: transform 0.1s ease; ${opacityStyle}">` +
                         `<i class="fa fa-bars" style="margin-right:8px; color:#aaa; cursor:grab;"></i>` + 
                         `<i class="${statusIconClass}" style="margin-right:8px; color:${statusIconColor}; width: 14px; text-align: center;"></i>` +
-                        `<span class="tab-label-text" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; ${fontStyle}" title="Dubbelklicka för att döpa om ${isTabDisabled ? '(Inaktiverad)' : ''}">${label}</span>` +
+                        `<span class="tab-label-text" style="flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; ${fontStyle}" title="Dubbelklicka f√∂r att d√∂pa om ${isTabDisabled ? '(Inaktiverad)' : ''}">${label}</span>` +
                         `</div>`);
 
-                    // RENT OCH DIREKT KLICKUTLÖSANDE UTAN BINDNINGSFEL
                     tabItem.on("click", function(e) {
                         if ($(e.target).hasClass('tab-rename-input')) return;
                         selectWorkspaceInNodeRed(tabId);
@@ -239,19 +233,17 @@
                 }, 50);
             }
 
-            // Real-time polling för tvåvägs-ordningssynk
-            setInterval(() => {
-                if (typeof RED.nodes.workspaceOrder !== "function") return;
-                if (listContainer.find('.tab-rename-input').length > 0) return;
-
-                const currentNodeRedOrder = RED.nodes.workspaceOrder() || [];
-                const currentOrderStr = JSON.stringify(currentNodeRedOrder);
-                
-                if (currentOrderStr !== lastKnownNodeRedOrder) {
-                    lastKnownNodeRedOrder = currentOrderStr;
-                    queueRender();
+            // --- üéØ REN OCH SKOTTS√ÑKER TV√ÖV√ÑGSSYNK F√ñR FLIKFLYTTAR v5 ---
+            // Vi lyssnar p√• musknapp-sl√§pp √∂ver flikraden/headern. Det triggas ALLTID, 
+            // oavsett riktning eller om det √§r samma flik flera g√•nger. 
+            // En timer p√• 150ms ser till att animationen √§r klar och datan sparad.
+            $(document).on("mouseup.tabmanager", function(e) {
+                if ($(e.target).closest('.red-ui-tabs, .red-ui-header').length > 0) {
+                    setTimeout(() => {
+                        queueRender();
+                    }, 150);
                 }
-            }, 350);
+            });
 
             $(document).on("click", "#node-dialog-ok", function() {
                 setTimeout(queueRender, 150);
@@ -259,7 +251,6 @@
 
             RED.events.on("workspace-order-changed", function(newOrder) {
                 tabStack = newOrder;
-                lastKnownNodeRedOrder = JSON.stringify(newOrder);
                 renderStack();
             });
             RED.events.on("workspace:change", function(event) {
@@ -280,7 +271,7 @@
 
                 externalWindow = window.open("", "NodeREDTabManagerPopout", "width=350,height=600,menubar=no,toolbar=no,location=no,status=no");
                 if (!externalWindow) {
-                    alert("Webbläsaren blockerade popup-fönstret. Tillåt popups för Node-RED.");
+                    alert("Webbl√§saren blockerade popup-f√∂nstret. Till√•t popups f√∂r Node-RED.");
                     return;
                 }
 
@@ -298,7 +289,7 @@
                 rootContainer = popoutRoot;
 
                 listContainer.css("height", "100%");
-                content.append('<div id="popout-msg" style="color:#999; font-style:italic; padding:20px; text-align:center;">Öppen i ett separat fönster.</div>');
+                content.append('<div id="popout-msg" style="color:#999; font-style:italic; padding:20px; text-align:center;">√ñppen i ett separat f√∂nster.</div>');
 
                 $(externalWindow).on("beforeunload", function() {
                     content.find('#popout-msg').remove();
@@ -325,4 +316,4 @@
     });
 })();
 </script>
-<!-- SLUT PÅ FILEN -->
+<!-- SLUT P√Ö FILEN -->
