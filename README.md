@@ -30,7 +30,7 @@ Install via the Node-RED palette manager, or from the command line:
 
    ```bash
 cd ~/.node-red
-npm install node-red-contrib-s2
+npm install @krambriw/node-red-tab-manager-v5
 
    ```
 Restart your Node-RED instance and force-refresh your browser (`Ctrl + F5` or `Cmd + Shift + R`).
